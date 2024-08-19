@@ -1,29 +1,45 @@
-FROM node:20-alpine as builder
+# BUILD FOR PRODUCTION
+FROM node:20-alpine AS base
 
-ENV NODE_ENV build
+ENV NODE_ENV="production"
 
-#USER node
-WORKDIR /home/node
+FROM base AS installer
 
-COPY package*.json ./
-RUN npm ci
+RUN apk add --no-cache libc6-compat
+# Set working directory
+WORKDIR /app
 
+COPY --chown=node:node ./package*.json ./
+COPY --chown=node:node ./start.sh ./start.sh
 COPY --chown=node:node . .
-RUN npx prisma generate \
-    && npm run build \
-    && npm prune --omit=dev
 
-# ---
+RUN npm install --include=dev
 
-FROM node:20-alpine
+RUN npm run build
 
-ENV NODE_ENV production
+FROM base AS prunner
+WORKDIR /app
 
-#USER node
-WORKDIR /home/node
+COPY --from=installer /app/node_modules ./node_modules
+COPY ./package*.json ./
 
-COPY --from=builder --chown=node:node /home/node/package*.json ./
-COPY --from=builder --chown=node:node /home/node/node_modules/ ./node_modules/
-COPY --from=builder --chown=node:node /home/node/dist/ ./dist/
+RUN npm prune --omit=dev
 
-CMD ["node", "dist/server.js"]
+FROM base AS runner
+WORKDIR /app
+
+# Don't run production as root
+RUN addgroup --system --gid 1024 nodejs
+RUN adduser --system --uid 1024 nestjs
+
+USER nestjs
+
+COPY --chown=nestjs:nodejs --from=prunner /app/package.json ./package.json
+COPY --chown=nestjs:nodejs --from=installer /app/dist ./dist
+COPY --chown=nestjs:nodejs --from=prunner /app/node_modules ./node_modules
+COPY --chown=nestjs:nodejs --from=installer /app/start.sh ./start.sh
+
+# CMD ["sh", "-c", "while :; do echo 'Container is running'; sleep 60; done"]
+
+CMD [ "sh", "start.sh" ]
+# ENTRYPOINT [ "start.sh" ]
