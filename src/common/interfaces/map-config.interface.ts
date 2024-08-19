@@ -1,9 +1,9 @@
 export interface MapConfig {
-  availableBiome: Biome[];
-  baseBiome: Biome;
+  availableBiome: BiomeType[];
+  baseBiome: BiomeType;
   numberOfBiomes: number;
   width: number;
   height: number;
 }
 
-export type Biome = 'plain' | 'desert' | 'forest' | 'ocean';
+export type BiomeType = 'plain' | 'desert' | 'forest' | 'ocean';
